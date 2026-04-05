@@ -40,11 +40,12 @@ void search(const char *current_path, const char *target_file){
     char full_path[1024];
 
     if(dp == NULL){
-        perror("無法打開目錄");
+        return;
     }
 
     while((entry = readdir(dp)) != NULL){
         if(strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        if(entry->d_name[0] == '.') continue;
 
         if(strcmp(current_path, "/") == 0){
             snprintf(full_path, sizeof(full_path), "/%s", entry->d_name);
