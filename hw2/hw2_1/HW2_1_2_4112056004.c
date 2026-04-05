@@ -25,7 +25,8 @@ int main(int argc, char *argv[]){
         if(entry->d_name[0] == '.') continue;
         
         printf("%-20s ", entry->d_name);
-        if(count++ == 3){
+        if(count++ != 3) printf("\t\t\t");
+        else{
             printf("\n");
             count = 1;
         }

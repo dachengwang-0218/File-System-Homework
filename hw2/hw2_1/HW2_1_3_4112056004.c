@@ -12,13 +12,9 @@
 void print_permissions(mode_t mode);
 
 int main(int argc, char *argv[]){
-    char *target_path = ".";
-    DIR *dp = opendir(target_path);
-    struct dirent *entry;
-    struct stat buf;
+    char *target_path = "."; 
     int is_l = 0;
-    int count = 1;
-
+    
     for(int i = 1 ; i < argc ; i++){
         if(strcmp(argv[i], "-l") == 0){
             is_l = 1;
@@ -26,6 +22,11 @@ int main(int argc, char *argv[]){
             target_path = argv[i];
         }
     }
+    
+    DIR *dp = opendir(target_path);
+    struct dirent *entry;
+    struct stat buf;
+    int count = 1;
 
     if(dp == NULL){
         perror("無法打開目錄");
@@ -69,13 +70,16 @@ int main(int argc, char *argv[]){
             printf("\n"); 
         }else{
             printf("%-20s", entry->d_name);
-            if(count++ == 3){
+            if(count++ != 3) printf("\t\t\t");
+            else{
                 printf("\n");
                 count = 1;
             }
         }
 
     }
+
+    if(!is_l) printf("\n");
 
     closedir(dp);
 
