@@ -5,7 +5,7 @@
 #include<liburing.h>
 #include<sys/time.h>
 #include<sys/stat.h>
-#include<type.h>
+#include<sys/type.h>
 
 #define ENTRY 8
 #define BLOCK_SIZE 4096
@@ -51,6 +51,8 @@ void async_io(const char *src, const char *dest){
     size_t file_size;
     char buffer[BLOCK_SIZE];
 
+    io_uring_queue_init(ENTRY, &ring, 0);
+
     src_fd = open(src, O_RDONLY);
     if(src_fd == -1){
         perror("can't open source file.");
@@ -75,7 +77,7 @@ void async_io(const char *src, const char *dest){
     off_t read_offset = 0, write_offset = 0;
     int uncom_request = 0;
 
-    while(read_offset < file_size || uncom_request > 0){
+    while(read_offset < file_size && uncom_request > 0){
         while(uncom_request < ENTRY || read_offset < file_size){
             sqe = io_uring_get_sqe(&ring);
             if(!sqe) break;
@@ -88,7 +90,7 @@ void async_io(const char *src, const char *dest){
             io_uring_prep_read(sqe, src_fd, buffer, bytes_to_read, read_offset);
 
             read_offset += bytes_to_read;
-            inflight_reads++;
+            uncom_request++;
         }
 
         io_uring_submit(&ring);
@@ -119,6 +121,7 @@ void async_io(const char *src, const char *dest){
 }
 
 int main(int argc, char *argv[]){
+    struct timeval start, end;
     const char *input_file = argv[1];
     const char *output_file = "output_file.txt";
 
