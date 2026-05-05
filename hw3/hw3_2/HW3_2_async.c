@@ -10,7 +10,7 @@
 #include<sys/types.h>
 
 #define SIZE 4096
-#define NUM 200
+#define NUM 512
 
 void multiplication(){
     int A[NUM][NUM], B[NUM][NUM], C[NUM][NUM];
