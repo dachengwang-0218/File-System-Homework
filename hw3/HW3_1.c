@@ -5,10 +5,10 @@
 #include<liburing.h>
 #include<sys/time.h>
 #include<sys/stat.h>
-#include<sys/type.h>
+#include<sys/types.h>
 
 #define ENTRY 8
-#define BLOCK_SIZE 4096
+#define SIZE 4096
 
 double get_time_diff(struct timeval start, struct timeval end){
     return (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -17,7 +17,7 @@ double get_time_diff(struct timeval start, struct timeval end){
 void blocking_io(const char *src, const char * dest){
     int src_fd, dest_fd;
     ssize_t read_bytes, write_bytes;
-    char buffer[BLOCK_SIZE];
+    char buffer[SIZE];
 
     src_fd = open(src, O_RDONLY);
     if(src_fd == -1){
@@ -31,7 +31,7 @@ void blocking_io(const char *src, const char * dest){
         return;
     }
 
-    while((read_bytes = read(src_fd, buffer, BLOCK_SIZE)) > 0){
+    while((read_bytes = read(src_fd, buffer, SIZE)) > 0){
         write_bytes = write(dest_fd, buffer, read_bytes);
         if(write_bytes == -1){
             break;
@@ -49,7 +49,7 @@ void async_io(const char *src, const char *dest){
     struct stat st;
     int src_fd, dest_fd;
     size_t file_size;
-    char buffer[BLOCK_SIZE];
+    char buffer[SIZE];
 
     io_uring_queue_init(ENTRY, &ring, 0);
 
@@ -77,13 +77,13 @@ void async_io(const char *src, const char *dest){
     off_t read_offset = 0, write_offset = 0;
     int uncom_request = 0;
 
-    while(read_offset < file_size && uncom_request > 0){
-        while(uncom_request < ENTRY || read_offset < file_size){
+    while(read_offset < file_size || uncom_request > 0){
+        while(uncom_request < ENTRY && read_offset < file_size){
             sqe = io_uring_get_sqe(&ring);
             if(!sqe) break;
 
-            size_t bytes_to_read = BLOCK_SIZE;
-            if (read_offset + BLOCK_SIZE > file_size) {
+            size_t bytes_to_read = SIZE;
+            if (read_offset + SIZE > file_size) {
                 bytes_to_read = file_size - read_offset;
             }
 
