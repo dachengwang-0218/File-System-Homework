@@ -7,11 +7,10 @@
 #include<sys/stat.h>
 #include<sys/types.h>
 
-#define ENTRY 8
 #define SIZE 4096
 #define NUM 200
 
-void multiplcation(){
+void multiplication(){
     int A[NUM][NUM], B[NUM][NUM], C[NUM][NUM];
     for(int i = 0 ; i < NUM ; i++){
         for(int j = 0 ; j < NUM ; j++){
@@ -45,6 +44,7 @@ void blocking_io(const char *src, const char * dest){
     }
 
     while((read_bytes = read(src_fd, buffer, SIZE)) > 0){
+        multiplication();
         write_bytes = write(dest_fd, buffer, read_bytes);
         if(write_bytes == -1){
             break;
@@ -55,7 +55,7 @@ void blocking_io(const char *src, const char * dest){
     close(dest_fd);
 }
 
-void async_io(const char *src, const char *dest){
+void async_io(const char *src, const char *dest, int ENTRY){
     struct io_uring ring;
     struct io_uring_sqe *sqe;
     struct io_uring_cqe *cqe;
@@ -107,6 +107,7 @@ void async_io(const char *src, const char *dest){
         }
 
         io_uring_submit(&ring);
+        multiplication();
 
         if(uncom_request > 0){
             int ret = io_uring_wait_cqe(&ring, &cqe);
@@ -135,8 +136,11 @@ void async_io(const char *src, const char *dest){
 
 int main(int argc, char *argv[]){
     struct timeval start, end;
+    const char *entry = argv[2];
     const char *input_file = argv[1];
     const char *output_file = "output_file.txt";
+
+    int ENTRY = *(entry) - '0';
 
     gettimeofday(&start, NULL);
     blocking_io(input_file, output_file);
@@ -144,7 +148,7 @@ int main(int argc, char *argv[]){
     printf("Blocking I/O Time: %f seconds\n\n", get_time_diff(start, end));
 
     gettimeofday(&start, NULL);
-    async_io(input_file, output_file);
+    async_io(input_file, output_file, ENTRY);
     gettimeofday(&end, NULL);
     printf("Asynchronous Time: %f seconds\n\n", get_time_diff(start, end));
 
