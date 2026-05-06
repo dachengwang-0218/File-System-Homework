@@ -61,6 +61,8 @@ int main(int argc, char *argv[]){
     const char *output_file = "output_file.txt";
     int ENTRY = atoi(argv[2]);
 
+    system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'");
+
     gettimeofday(&start, NULL);
     blocking_io(input_file, output_file);
     gettimeofday(&end, NULL);
