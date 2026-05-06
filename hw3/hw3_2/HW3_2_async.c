@@ -9,8 +9,8 @@
 #include<sys/stat.h>
 #include<sys/types.h>
 
-#define SIZE 4096
-#define NUM 512
+#define SIZE 65536
+#define NUM 20
 
 void multiplication(){
     int A[NUM][NUM], B[NUM][NUM], C[NUM][NUM];
