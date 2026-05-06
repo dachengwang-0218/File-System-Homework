@@ -93,11 +93,9 @@ void async_io(const char *src, const char *dest, int ENTRY){
 
 int main(int argc, char *argv[]){
     struct timeval start, end;
-    const char *entry = argv[2];
     const char *input_file = argv[1];
     const char *output_file = "output_file.txt";
-
-    int ENTRY = *(entry) - '0';
+    int ENTRY = atoi(argv[2]);
 
     gettimeofday(&start, NULL);
     async_io(input_file, output_file, ENTRY);
