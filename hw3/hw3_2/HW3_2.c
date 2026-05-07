@@ -8,7 +8,7 @@
 #include<sys/types.h>
 
 #define SIZE 65536
-#define NUM 50
+#define NUM 20
 
 typedef struct{
     int op_type;
@@ -72,10 +72,10 @@ void async_io(const char *src, const char *dest, int ENTRY){
         buffers[i] = malloc(SIZE);
     }
 
-    io_info *info = malloc(ENTRY * sizeof(in_info));
-    int buffer_in_use = calloc(ENTRY * sizeof(int));
+    io_info *info = malloc(ENTRY * sizeof(io_info));
+    int *buffer_in_use = calloc(ENTRY, sizeof(int));
 
-    io_uring_queue_init(&ring);
+    io_uring_queue_init(ENTRY, &ring, 0);
 
     src_fd = open(src, O_RDONLY);
     if(src_fd == -1){
@@ -130,7 +130,7 @@ void async_io(const char *src, const char *dest, int ENTRY){
         }
 
         if(submit_this_round > 0){
-            io_uring_submit()sqe;
+            io_uring_submit(&ring);
             multiplication();
         }
 
@@ -139,15 +139,15 @@ void async_io(const char *src, const char *dest, int ENTRY){
             int ret = io_uring_wait_cqe(&ring, &cqe);
             if(ret < 0) break;
 
-            io_info *req = (in_info *)io_uring_cqe_get_data(cqe);
+            io_info *req = (io_info *)io_uring_cqe_get_data(cqe);
             int res = cqe->res;
             io_uring_cqe_seen(&ring, cqe);
 
             if(req->op_type == 0){
                 if(res > 0){
-                    struct io_uring_sqe *sqe = ioi_uring_get_sqe(&ring);
+                    struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
                     if(sqe){
-                        io_uring_prep_write(sqe, dest_sqe, buffers[req->buf_idx], res, req->offset);
+                        io_uring_prep_write(sqe, dest_fd, buffers[req->buf_idx], res, req->offset);
                         req->op_type = 1;
                         io_uring_sqe_set_data(sqe, req);
                         io_uring_submit(&ring);
