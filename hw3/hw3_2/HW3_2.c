@@ -8,7 +8,7 @@
 #include<sys/types.h>
 
 #define SIZE 65536
-#define NUM 20
+#define NUM 50
 
 typedef struct{
     int op_type;
