@@ -122,7 +122,7 @@ void async_io(const char *src, const char *dest, int ENTRY){
 int main(int argc, char *argv[]){
     struct timeval start, end;
     const char *input_file = argv[1];
-    const char *output_file = "output_file.txt";
+    const char *output_file = "output.txt";
     int ENTRY = atoi(argv[2]);
 
     system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'");
