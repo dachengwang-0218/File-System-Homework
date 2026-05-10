@@ -7,6 +7,8 @@
 #include<pthread.h>
 
 #define BUFFER_SIZE 1024
+#define PORT 8080
+#define SERVER_IP "127.0.0.1"
 
 void *msg_recv_handler(void *socket_descriptor){
     int sock_fd = *(int*)socket_descriptor;
@@ -18,7 +20,8 @@ void *msg_recv_handler(void *socket_descriptor){
         recv_len = recv(sock_fd, msg, BUFFER_SIZE, 0);
 
         if(recv_len > 0){
-            printf("%s", msg);
+            printf("\r\033[K%s", msg);
+            printf("[Me]: ");
             fflush(stdout);
         }else if(recv_len == 0){
             printf("Servr 已斷線.\n");
@@ -31,9 +34,7 @@ void *msg_recv_handler(void *socket_descriptor){
     exit(0);
 }
 
-int main(int argc, char *argv[]){
-    char *server_ip = argv[1];
-    int server_port = atoi(argv[2]);
+int main(void){
     int sock_fd;
     struct sockaddr_in server_addr;
     char msg[BUFFER_SIZE];
@@ -47,8 +48,8 @@ int main(int argc, char *argv[]){
 
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(server_port);
-    if(inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0){
+    server_addr.sin_port = htons(PORT);
+    if(inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0){
         perror("Invalid address or address not supported.");
         return 1;
     }
@@ -65,6 +66,9 @@ int main(int argc, char *argv[]){
     }
 
     while(1){
+        printf("[Me]: ");
+        fflush(stdout);
+
         memset(msg, 0, BUFFER_SIZE);
 
         if(fgets(msg, BUFFER_SIZE, stdin) != NULL){
@@ -83,22 +87,3 @@ int main(int argc, char *argv[]){
     close(sock_fd);
     return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

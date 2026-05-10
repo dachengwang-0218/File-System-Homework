@@ -6,25 +6,28 @@
 #include<arpa/inet.h>
 #include<pthread.h>
 
-#define MAX_CLIENT 100
+#define MAX_CLIENTS 100
 #define BUFFER_SIZE 1024
 #define SERVER_PORT 8080
+#define PORT 8080
 
 typedef struct{
     int fd;
+    int id;
     struct sockaddr_in addr;
     int is_active;
 }ClientInfo;
 
-ClientInfo clients[MAX_CLIENT];
+ClientInfo clients[MAX_CLIENTS];
 pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
+int total_connections = 0;
 
-void broadcast_msg(char *message, int sender_fd){
+void broadcast_msg(char *msg, int sender_fd){
     pthread_mutex_lock(&client_mutex);
 
-    for(int i = 0 ; i < MAX_CLIENT ; i++){
+    for(int i = 0 ; i < MAX_CLIENTS ; i++){
         if(clients[i].is_active && clients[i].fd != sender_fd){
-            if(send(clients[i].fd, message, strlen(message), 0) < 0){
+            if(send(clients[i].fd, msg, strlen(msg), 0) < 0){
                 perror("廣播訊息失敗.");
             }
         }
@@ -39,23 +42,32 @@ void *client_handler(void *arg){
 
     char buffer[BUFFER_SIZE];
     int read_size;
+    int client_id;
+
+    for(int i = 0 ; i < MAX_CLIENTS ; i++){
+        if(clients[i].fd == client_fd){
+            client_id = clients[i].id;
+        }
+    }
 
     while((read_size = recv(client_fd, buffer, BUFFER_SIZE - 1, 0)) > 0){
         buffer[read_size] = '\0';
         char formatted_msg[BUFFER_SIZE + 64];
 
-        snprintf(formatted_msg, sizeof(formatted_msg), "[Clinet %d]: %s", client_fd, buffer);
+        snprintf(formatted_msg, sizeof(formatted_msg), "[Clinet %d]: %s", client_id, buffer);
+        printf("%s", formatted_msg);
+        fflush(stdout);
         broadcast_msg(formatted_msg, client_fd);
 
         memset(buffer, 0, BUFFER_SIZE);
     }
 
     if(read_size == 0){
-        printf("Client %d Disconnected.\n", client_fd);
+        printf("Client %d Disconnected.\n", client_id);
     }
 
     pthread_mutex_lock(&client_mutex);
-    for(int i = 0 ; i < MAX_CLIENT ; i++){
+    for(int i = 0 ; i < MAX_CLIENTS ; i++){
         if(clients[i].is_active && clients[i].fd == client_fd){
             clients[i].is_active = 0;
             break;
@@ -67,13 +79,12 @@ void *client_handler(void *arg){
     pthread_exit(NULL);
 }
 
-int main(int argc, char *argv[]){
+int main(void){
     int server_fd, client_fd;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    int port = atoi(argv[1]);
 
-    for(int i = 0 ; i < MAX_CLIENT ; i++){
+    for(int i = 0 ; i < MAX_CLIENTS ; i++){
         clients[i].is_active = 0;
     }
 
@@ -89,7 +100,7 @@ int main(int argc, char *argv[]){
     memset(&server_addr, 0, sizeof(server_addr));
     memset(&client_addr, 0, sizeof(client_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
+    server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if(bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
@@ -101,7 +112,7 @@ int main(int argc, char *argv[]){
         perror("Listen 失敗.");
         return 1;
     }
-    printf("Server is running.\nListening for incoming connections on Port %d...\n", port);
+    printf("Server is running.\nListening for incoming connections on Port %d\n", PORT);
 
     while(1){
         client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
@@ -113,11 +124,13 @@ int main(int argc, char *argv[]){
         
         pthread_mutex_lock(&client_mutex);
         int added = 0;
-        for(int i = 0 ; i < MAX_CLIENT ; i++){
+        for(int i = 0 ; i < MAX_CLIENTS ; i++){
             if(clients[i].is_active == 0){
+                total_connections++;
                 clients[i].fd = client_fd;
                 clients[i].addr = client_addr;
                 clients[i].is_active = 1;
+                clients[i].id = total_connections;
                 added = 1;
                 break;
             }
@@ -125,7 +138,7 @@ int main(int argc, char *argv[]){
         pthread_mutex_unlock(&client_mutex);
 
         if(!added){
-            printf("Clients 已達到上限: %d人\n", MAX_CLIENT);
+            printf("Clients 已達到上限: %d人\n", MAX_CLIENTS);
             close(client_fd);
             continue;
         }
@@ -146,26 +159,3 @@ int main(int argc, char *argv[]){
     close(server_fd);
     return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
