@@ -153,15 +153,15 @@ int main(void){
                     }else{
                         perror("recv() 發生錯誤.");
                     }
-                }
 
-                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_client_fd, NULL);
-                close(curr_client_fd);
-
-                for(int j = 0 ; j < MAX_CLIENTS ; j++){
-                    if(clients[j].is_active && clients[j].fd == curr_client_fd){
-                        clients[j].is_active = 0;
-                        break;
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_client_fd, NULL);
+                    close(curr_client_fd);
+    
+                    for(int j = 0 ; j < MAX_CLIENTS ; j++){
+                        if(clients[j].is_active && clients[j].fd == curr_client_fd){
+                            clients[j].is_active = 0;
+                            break;
+                        }
                     }
                 }
             }

@@ -54,7 +54,7 @@ void *client_handler(void *arg){
         buffer[read_size] = '\0';
         char formatted_msg[BUFFER_SIZE + 64];
 
-        snprintf(formatted_msg, sizeof(formatted_msg), "[Clinet %d]: %s", client_id, buffer);
+        snprintf(formatted_msg, sizeof(formatted_msg), "[Client %d]: %s", client_id, buffer);
         printf("%s", formatted_msg);
         fflush(stdout);
         broadcast_msg(formatted_msg, client_fd);
