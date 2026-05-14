@@ -177,7 +177,7 @@ int main(void){
                 add_recv_request(&ring, client_fd, req);                
             }else{
                 if(read_size == 0){
-                    printf("Client %d disconnected.\n");
+                    printf("Client %d disconnected.\n", client_id);
                 }else{
                     perror("recv 錯誤.");
                 }
