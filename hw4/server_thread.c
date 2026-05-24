@@ -64,6 +64,9 @@ void *client_handler(void *arg){
 
     if(read_size == 0){
         printf("Client %d Disconnected.\n", client_id);
+        char client_quit_msg[BUFFER_SIZE];
+        snprintf(client_quit_msg, sizeof(client_quit_msg), "Client %d Disconnected.\n", client_id);
+        broadcast_msg(client_quit_msg, client_fd);
     }
 
     pthread_mutex_lock(&client_mutex);

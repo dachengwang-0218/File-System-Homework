@@ -150,6 +150,9 @@ int main(void){
                 }else{
                     if(read_size == 0){
                         printf("Client %d disconnected.\n", client_id);
+                        char client_quit_msg[BUFFER_SIZE];
+                        snprintf(client_quit_msg, sizeof(client_quit_msg), "Client %d Disconnected.\n", client_id);
+                        broadcast_msg(client_quit_msg, curr_client_fd);
                     }else{
                         perror("recv() 發生錯誤.");
                     }
