@@ -45,7 +45,7 @@ int main(int argc, char *argv[]){
         printf("My current non-loopback IPv4 address(es): %s\n", inet_ntoa(ip_addr->sin_addr));
     }
 
-    if(ioctl(socket_fd, SIOCGFFLAGS, &ifr) < 0){
+    if(ioctl(socket_fd, SIOCGIFFLAGS, &ifr) < 0){
         perror("ioctl SIOCGIFFLAGS Fail.");
         close(socket_fd);
         return 1;
