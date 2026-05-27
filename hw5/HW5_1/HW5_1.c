@@ -15,6 +15,7 @@
 #include<linux/if_ether.h>
 #include<linux/ip.h>
 #include<linux/udp.h>
+#include<linux/tcp.h>
 
 #define PACKET_NUM 200
 #define BUFFER_SIZE 65536
@@ -166,6 +167,78 @@ void run_mode2(int socket_fd, unsigned char *buffer, unsigned int my_ip){
     }
 }
 
+void run_mode3(int socket_fd, unsigned char *buffer, unsigned int my_ip){
+    int tcp_count = 0;
+
+    printf("----- packets captured -----\n");
+
+    while(tcp_count < 5){
+        ssize_t bytes = recvfrom(socket_fd, buffer, BUFFER_SIZE, 0, NULL, NULL);
+        if(bytes < 0){
+            perror("recvfrom Fail.");
+            break;
+        }
+
+        if(bytes < sizeof(struct ethhdr)){
+            continue;
+        }
+
+        struct ethhdr *eth = (struct ethhdr *)buffer;
+        unsigned short eth_type = ntohs(eth->h_proto);
+
+        //only accept IPv4
+        if(eth_type != ETH_P_IP){
+            continue;
+        }
+
+        //packet length must longer than ethernet header + ipv4 header
+        if(bytes < sizeof(struct ethhdr) + sizeof(struct iphdr)){
+            continue;
+        }
+
+        struct iphdr *ip = (struct iphdr *)(buffer + sizeof(struct ethhdr));
+
+        //only accept TCP
+        if(ip->protocol != IPPROTO_TCP){
+            continue;
+        }
+
+        //the source and destination ip address msut NOT be the interface ip
+        if(ip->saddr == my_ip || ip->daddr == my_ip){
+            continue;
+        }
+
+        int ip_header_len = ip->ihl * 4;
+        //packet length must longer than ethernet header + ipv4 header + udp header
+        if(bytes < sizeof(struct ethhdr) + ip_header_len + sizeof(struct tcphdr)){
+            continue;
+        }
+
+        struct tcphdr *tcp = (struct tcphdr *)(buffer + sizeof(struct ethhdr) + ip_header_len);
+        struct in_addr src_ip, dest_ip;
+        src_ip.s_addr = ip->saddr;
+        dest_ip.s_addr = ip->daddr;
+
+        tcp_count++;
+        printf("packet %d:\n", tcp_count);
+
+        printf("Source MAC address: ");
+        print_mac(eth->h_source);
+        printf("Destination MAC address: ");
+        print_mac(eth->h_dest);
+
+        printf("IP->protocol\t= TCP\n");
+        printf("IP->src_ip\t= %s\n", inet_ntoa(src_ip));
+        printf("IP->dst_ip\t= %s\n", inet_ntoa(dest_ip));
+        printf("Src_port\t= %u\n", ntohs(tcp->source));
+        printf("Dst_port\t= %u\n", ntohs(tcp->dest));
+
+        if(tcp_count != 5){
+            putchar('\n');
+        }
+    }
+}
+
 int main(int argc, char *argv[]){
     char *mode = argv[1];
     char *interface = argv[2];
@@ -238,6 +311,8 @@ int main(int argc, char *argv[]){
         run_mode1(socket_fd, buffer);
     }else if(strcmp(mode, "mode2") == 0){
         run_mode2(socket_fd, buffer, my_ip.s_addr);
+    }else if(strcmp(mode, "mode3") == 0){
+        run_mode3(socket_fd, buffer, my_ip.s_addr);
     }
 
     if(ioctl(socket_fd, SIOCSIFFLAGS, &old_ifr) < 0){
