@@ -21,7 +21,7 @@
 #define BUFFER_SIZE 65536
 
 void print_mac(unsigned char *mac){
-    printf("%02X:%02X:%02X%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    printf("%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
 void run_mode1(int socket_fd, unsigned char *buffer){
