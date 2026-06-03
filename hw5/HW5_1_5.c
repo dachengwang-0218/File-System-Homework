@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include<unistd.h>
+#include<stdint.h>
 
 #include<sys/socket.h>
 #include<sys/ioctl.h>
@@ -21,11 +22,11 @@
 #define MODIFY_TEXT "MODIFIED_BY_HW5_1_5"
 
 struct pseudo_header{
-    unsigned int src_addr;
-    unsigned int dst_addr;
-    unsigned char zero;
-    unsigned char protocol;
-    unsigned short length;
+    uint32_t src_addr;
+    uint32_t dst_addr;
+    uint8_t zero;
+    uint8_t protocol;
+    uint16_t length;
 };
 
 unsigned short checksum(unsigned short *buf, int len){
@@ -51,10 +52,15 @@ unsigned short transport_checksum(struct iphdr *ip,
                                   unsigned char *transport_header,
                                   int transport_len,
                                   int protocol){
-    char temp[BUFFER_SIZE];
+    unsigned char temp[BUFFER_SIZE];
     struct pseudo_header psh;
 
+    if((int)(sizeof(struct pseudo_header) + transport_len) > BUFFER_SIZE){
+        return 0;
+    }
+
     memset(temp, 0, BUFFER_SIZE);
+    memset(&psh, 0, sizeof(psh));
 
     psh.src_addr = ip->saddr;
     psh.dst_addr = ip->daddr;
@@ -83,27 +89,34 @@ void modify_payload_same_length(unsigned char *payload, int payload_len){
     memcpy(payload, MODIFY_TEXT, modify_len);
 }
 
-void print_ip(unsigned int ip_addr){
+void print_ip(uint32_t ip_addr){
     struct in_addr addr;
     addr.s_addr = ip_addr;
     printf("%s", inet_ntoa(addr));
 }
 
+void print_mac(unsigned char *mac){
+    printf("%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2],
+           mac[3], mac[4], mac[5]);
+}
+
 int main(int argc, char *argv[]){
-    if(argc != 2){
-        printf("Usage: sudo %s <interface>\n", argv[0]);
-        printf("Example: sudo %s enp0s3\n", argv[0]);
+    if(argc != 3){
+        printf("Usage: sudo %s <interface> <target_port>\n", argv[0]);
+        printf("Example: sudo %s enp46s0 9090\n", argv[0]);
         return 1;
     }
 
-    int target_port = 9090;
     char *interface = argv[1];
+    int target_port = atoi(argv[2]);
 
     int socket_fd;
     unsigned char buffer[BUFFER_SIZE];
 
     struct ifreq ifr;
-    struct sockaddr_ll sll;
+    struct ifreq old_ifr;
+    struct sockaddr_ll bind_addr;
 
     socket_fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if(socket_fd < 0){
@@ -114,24 +127,45 @@ int main(int argc, char *argv[]){
     memset(&ifr, 0, sizeof(ifr));
     strncpy(ifr.ifr_name, interface, IFNAMSIZ - 1);
 
-    if(ioctl(socket_fd, SIOCGIFINDEX, &ifr) < 0){
-        perror("ioctl SIOCGIFINDEX Fail.");
+    if(ioctl(socket_fd, SIOCGIFFLAGS, &ifr) < 0){
+        perror("ioctl SIOCGIFFLAGS Fail.");
         close(socket_fd);
         return 1;
     }
 
-    memset(&sll, 0, sizeof(sll));
-    sll.sll_family = AF_PACKET;
-    sll.sll_ifindex = ifr.ifr_ifindex;
-    sll.sll_protocol = htons(ETH_P_ALL);
+    old_ifr = ifr;
+    ifr.ifr_flags |= IFF_PROMISC;
 
-    if(bind(socket_fd, (struct sockaddr *)&sll, sizeof(sll)) < 0){
+    if(ioctl(socket_fd, SIOCSIFFLAGS, &ifr) < 0){
+        perror("ioctl SIOCSIFFLAGS Fail.");
+        close(socket_fd);
+        return 1;
+    }
+
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_name, interface, IFNAMSIZ - 1);
+
+    if(ioctl(socket_fd, SIOCGIFINDEX, &ifr) < 0){
+        perror("ioctl SIOCGIFINDEX Fail.");
+        ioctl(socket_fd, SIOCSIFFLAGS, &old_ifr);
+        close(socket_fd);
+        return 1;
+    }
+
+    memset(&bind_addr, 0, sizeof(bind_addr));
+    bind_addr.sll_family = AF_PACKET;
+    bind_addr.sll_ifindex = ifr.ifr_ifindex;
+    bind_addr.sll_protocol = htons(ETH_P_ALL);
+
+    if(bind(socket_fd, (struct sockaddr *)&bind_addr, sizeof(bind_addr)) < 0){
         perror("bind Fail.");
+        ioctl(socket_fd, SIOCSIFFLAGS, &old_ifr);
         close(socket_fd);
         return 1;
     }
 
     printf("Modifier is running on interface: %s\n", interface);
+    printf("Target port: %d\n", target_port);
     printf("Payload will be changed to: %s\n\n", MODIFY_TEXT);
 
     while(1){
@@ -154,7 +188,7 @@ int main(int argc, char *argv[]){
             continue;
         }
 
-        if(bytes < sizeof(struct ethhdr)){
+        if(bytes < (ssize_t)sizeof(struct ethhdr)){
             continue;
         }
 
@@ -165,44 +199,66 @@ int main(int argc, char *argv[]){
             continue;
         }
 
-        if(bytes < sizeof(struct ethhdr) + sizeof(struct iphdr)){
+        if(bytes < (ssize_t)(sizeof(struct ethhdr) + sizeof(struct iphdr))){
             continue;
         }
 
         struct iphdr *ip = (struct iphdr *)(buffer + sizeof(struct ethhdr));
         int ip_hdr_len = ip->ihl * 4;
 
-        if(bytes < sizeof(struct ethhdr) + ip_hdr_len){
+        if(ip->version != 4){
             continue;
         }
 
-        if(ntohs(ip->frag_off) & 0x1fff){
+        if(ip_hdr_len < (int)sizeof(struct iphdr)){
+            continue;
+        }
+
+        if(bytes < (ssize_t)(sizeof(struct ethhdr) + ip_hdr_len)){
+            continue;
+        }
+
+        uint16_t frag = ntohs(ip->frag_off);
+        if(frag & 0x3fff){
             continue;
         }
 
         int ip_total_len = ntohs(ip->tot_len);
 
-        if(bytes < sizeof(struct ethhdr) + ip_total_len){
+        if(ip_total_len < ip_hdr_len){
+            continue;
+        }
+
+        if(bytes < (ssize_t)(sizeof(struct ethhdr) + ip_total_len)){
             continue;
         }
 
         if(ip->protocol == IPPROTO_UDP){
-            if(ip_total_len < ip_hdr_len + sizeof(struct udphdr)){
+            if(ip_total_len < ip_hdr_len + (int)sizeof(struct udphdr)){
                 continue;
             }
 
             struct udphdr *udp =
                 (struct udphdr *)(buffer + sizeof(struct ethhdr) + ip_hdr_len);
 
-            int udp_hdr_len = sizeof(struct udphdr);
-            int udp_total_len = ntohs(udp->len);
-            int payload_len = udp_total_len - udp_hdr_len;
-
-            if(payload_len <= 0){
+            if(ntohs(udp->dest) != target_port){
                 continue;
             }
 
-            if(ntohs(udp->dest) != target_port){
+            int udp_hdr_len = sizeof(struct udphdr);
+            int udp_total_len = ntohs(udp->len);
+
+            if(udp_total_len < udp_hdr_len){
+                continue;
+            }
+
+            if(ip_total_len < ip_hdr_len + udp_total_len){
+                continue;
+            }
+
+            int payload_len = udp_total_len - udp_hdr_len;
+
+            if(payload_len <= 0){
                 continue;
             }
 
@@ -215,6 +271,12 @@ int main(int argc, char *argv[]){
             print_ip(ip->daddr);
             printf(":%u\n", ntohs(udp->dest));
 
+            printf("Ethernet: ");
+            print_mac(eth->h_source);
+            printf(" -> ");
+            print_mac(eth->h_dest);
+            printf("\n");
+
             printf("Original payload length: %d\n", payload_len);
 
             modify_payload_same_length(payload, payload_len);
@@ -222,38 +284,48 @@ int main(int argc, char *argv[]){
             ip->check = 0;
             ip->check = checksum((unsigned short *)ip, ip_hdr_len);
 
-            if(udp->check != 0){
-                udp->check = 0;
-                udp->check = transport_checksum(ip,
-                                                (unsigned char *)udp,
-                                                udp_total_len,
-                                                IPPROTO_UDP);
-            }
+            udp->check = 0;
+            udp->check = transport_checksum(ip,
+                                            (unsigned char *)udp,
+                                            udp_total_len,
+                                            IPPROTO_UDP);
+
+            struct sockaddr_ll send_addr;
+            memset(&send_addr, 0, sizeof(send_addr));
+
+            send_addr.sll_family = AF_PACKET;
+            send_addr.sll_ifindex = ifr.ifr_ifindex;
+            send_addr.sll_halen = ETH_ALEN;
+            memcpy(send_addr.sll_addr, eth->h_dest, ETH_ALEN);
 
             ssize_t sent = sendto(socket_fd,
                                   buffer,
                                   sizeof(struct ethhdr) + ip_total_len,
                                   0,
-                                  (struct sockaddr *)&sll,
-                                  sizeof(sll));
+                                  (struct sockaddr *)&send_addr,
+                                  sizeof(send_addr));
 
             if(sent < 0){
                 perror("sendto UDP Fail.");
             }else{
-                printf("Modified UDP packet sent.\n\n");
+                printf("Modified UDP packet sent. bytes = %ld\n\n", sent);
             }
         }
         else if(ip->protocol == IPPROTO_TCP){
-            if(ip_total_len < ip_hdr_len + sizeof(struct tcphdr)){
+            if(ip_total_len < ip_hdr_len + (int)sizeof(struct tcphdr)){
                 continue;
             }
 
             struct tcphdr *tcp =
                 (struct tcphdr *)(buffer + sizeof(struct ethhdr) + ip_hdr_len);
 
+            if(ntohs(tcp->dest) != target_port){
+                continue;
+            }
+
             int tcp_hdr_len = tcp->doff * 4;
 
-            if(tcp_hdr_len < sizeof(struct tcphdr)){
+            if(tcp_hdr_len < (int)sizeof(struct tcphdr)){
                 continue;
             }
 
@@ -268,10 +340,6 @@ int main(int argc, char *argv[]){
                 continue;
             }
 
-            if(ntohs(tcp->dest) != target_port){
-                continue;
-            }
-
             unsigned char *payload =
                 buffer + sizeof(struct ethhdr) + ip_hdr_len + tcp_hdr_len;
 
@@ -280,6 +348,12 @@ int main(int argc, char *argv[]){
             printf(":%u -> ", ntohs(tcp->source));
             print_ip(ip->daddr);
             printf(":%u\n", ntohs(tcp->dest));
+
+            printf("Ethernet: ");
+            print_mac(eth->h_source);
+            printf(" -> ");
+            print_mac(eth->h_dest);
+            printf("\n");
 
             printf("Original payload length: %d\n", payload_len);
 
@@ -294,19 +368,33 @@ int main(int argc, char *argv[]){
                                             tcp_total_len,
                                             IPPROTO_TCP);
 
+            struct sockaddr_ll send_addr;
+            memset(&send_addr, 0, sizeof(send_addr));
+
+            send_addr.sll_family = AF_PACKET;
+            send_addr.sll_ifindex = ifr.ifr_ifindex;
+            send_addr.sll_halen = ETH_ALEN;
+            memcpy(send_addr.sll_addr, eth->h_dest, ETH_ALEN);
+
             ssize_t sent = sendto(socket_fd,
                                   buffer,
                                   sizeof(struct ethhdr) + ip_total_len,
                                   0,
-                                  (struct sockaddr *)&sll,
-                                  sizeof(sll));
+                                  (struct sockaddr *)&send_addr,
+                                  sizeof(send_addr));
 
             if(sent < 0){
                 perror("sendto TCP Fail.");
             }else{
-                printf("Modified TCP packet sent.\n\n");
+                printf("Modified TCP packet sent. bytes = %ld\n\n", sent);
             }
         }
+    }
+
+    if(ioctl(socket_fd, SIOCSIFFLAGS, &old_ifr) < 0){
+        perror("restore interface flags Fail.");
+    }else{
+        printf("interface flags restored on %s\n", interface);
     }
 
     close(socket_fd);
